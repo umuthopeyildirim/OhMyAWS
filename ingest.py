@@ -1,7 +1,8 @@
 import os
 import argparse
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.document_loaders import PyPDFLoader, GithubFileLoader, UnstructuredRSTLoader
+from langchain_community.document_loaders import PyPDFLoader, GithubFileLoader
+from langchain_community.document_loaders import UnstructuredRSTLoader
 from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_community.vectorstores import MongoDBAtlasVectorSearch
 from pymongo import MongoClient
@@ -34,6 +35,7 @@ def GetPDF(url):
     loader = PyPDFLoader(url)
     return loader
 
+
 def GetRST(fname):
     loader = UnstructuredRSTLoader(file_path=fname, mode="elements")
     return loader
@@ -43,11 +45,13 @@ def main(loader_type, **kwargs):
     if loader_type == 'github':
         loader = GetGithub(**kwargs)
     elif loader_type == 'pdf':
-        loader = GetPDF(**kwargs['url'])
+        # Assumes 'url' is always provided when loader_type is 'pdf'
+        loader = GetPDF(url=kwargs['url'])
     elif loader_type == 'rst':
-        loader = GetRST(**kwargs['fname'])
+        loader = GetRST(fname=kwargs['fname'])  # Corrected this line
     else:
-        raise ValueError("Unsupported loader type. Use 'github' or 'pdf'.")
+        raise ValueError(
+            "Unsupported loader type. Use 'github', 'pdf', or 'rst'.")
 
     # Assuming loader has a method to fetch and return data
     data = loader.load()
@@ -70,16 +74,17 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description='Data loader selection for document ingestion.')
     parser.add_argument('--loader_type', type=str,
-                        help='Type of loader to use: "github" or "pdf".')
+                        help='Type of loader to use: "github", "pdf", or "rst".')
     parser.add_argument('--repo', type=str, help='GitHub repository name.')
     parser.add_argument('--access_token', type=str,
                         help='GitHub access token.')
     parser.add_argument('--filter_extension', type=str,
                         help='File extension to filter for GitHub loader.')
     parser.add_argument('--url', type=str, help='URL for PDF loader.')
-    parser.add_argument('--fname', type=str, help='rst filename for RST loader')
+    parser.add_argument('--fname', type=str,
+                        help='rst filename for RST loader')
 
     args = parser.parse_args()
 
     kwargs = {k: v for k, v in vars(args).items() if v is not None}
-    main(args.loader_type, **kwargs)
+    main(**kwargs)  # Modified this line

@@ -1,0 +1,10 @@
+pypandoc
+unstructured
+decouple
+langchain-cli
+langchain-community
+pymongo
+langchain
+dotenv
+tqdm
+langchain_openai

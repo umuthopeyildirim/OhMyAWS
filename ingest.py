@@ -1,7 +1,7 @@
 import os
 import argparse
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.document_loaders import PyPDFLoader, GithubFileLoader
+from langchain_community.document_loaders import PyPDFLoader, GithubFileLoader, UnstructuredRSTLoader
 from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_community.vectorstores import MongoDBAtlasVectorSearch
 from pymongo import MongoClient
@@ -34,12 +34,18 @@ def GetPDF(url):
     loader = PyPDFLoader(url)
     return loader
 
+def GetRST(fname):
+    loader = UnstructuredRSTLoader(file_path=fname, mode="elements")
+    return loader
+
 
 def main(loader_type, **kwargs):
     if loader_type == 'github':
         loader = GetGithub(**kwargs)
     elif loader_type == 'pdf':
         loader = GetPDF(**kwargs['url'])
+    elif loader_type == 'rst':
+        loader = GetRST(**kwargs['fname'])
     else:
         raise ValueError("Unsupported loader type. Use 'github' or 'pdf'.")
 
@@ -71,6 +77,7 @@ if __name__ == "__main__":
     parser.add_argument('--filter_extension', type=str,
                         help='File extension to filter for GitHub loader.')
     parser.add_argument('--url', type=str, help='URL for PDF loader.')
+    parser.add_argument('--fname', type=str, help='rst filename for RST loader')
 
     args = parser.parse_args()
 

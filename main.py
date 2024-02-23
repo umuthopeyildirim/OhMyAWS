@@ -1,39 +1,45 @@
+import argparse
 import os
-
+from dotenv import load_dotenv
+from pymongo import MongoClient
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.chat_models import ChatOpenAI
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_community.vectorstores import MongoDBAtlasVectorSearch
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.pydantic_v1 import BaseModel
+from langchain_community.chat_models import ChatOpenAI
 from langchain_core.runnables import (
     RunnableLambda,
     RunnableParallel,
     RunnablePassthrough,
 )
-from pymongo import MongoClient
-from decouple import config
+from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 
-# Set DB
-if config('MONGO_URI', None) is None:
-    raise Exception("Missing `MONGO_URI` environment variable.")
-MONGO_URI = config('MONGO_URI')
 
-DB_NAME = "langchain-test-2"
-COLLECTION_NAME = "test"
+# Load environment variables
+load_dotenv()
+
+# Database configuration
+MONGO_URI = os.getenv('MONGO_URI')
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+if not MONGO_URI or not OPENAI_API_KEY:
+    raise Exception(
+        "Missing required environment variables: `MONGO_URI` and/or `OPENAI_API_KEY`.")
+
+DB_NAME = "ohmyaws"
+COLLECTION_NAME = "documents"
 ATLAS_VECTOR_SEARCH_INDEX_NAME = "default"
 
 client = MongoClient(MONGO_URI)
 db = client[DB_NAME]
 MONGODB_COLLECTION = db[COLLECTION_NAME]
 
-# Read from MongoDB Atlas Vector Search
+# Setup for context retrieval and response generation
 vectorstore = MongoDBAtlasVectorSearch.from_connection_string(
     MONGO_URI,
-    DB_NAME + "." + COLLECTION_NAME,
-    OpenAIEmbeddings(disallowed_special=()),
+    f"{DB_NAME}.{COLLECTION_NAME}",
+    OpenAIEmbeddings(disallowed_special=(), api_key=OPENAI_API_KEY),
     index_name=ATLAS_VECTOR_SEARCH_INDEX_NAME,
 )
 retriever = vectorstore.as_retriever()
@@ -45,8 +51,9 @@ Question: {question}
 """
 prompt = ChatPromptTemplate.from_template(template)
 
-# RAG
-model = ChatOpenAI()
+# Setup OpenAI Chat model
+model = ChatOpenAI(api_key=OPENAI_API_KEY)
+
 chain = (
     RunnableParallel({"context": retriever, "question": RunnablePassthrough()})
     | prompt
@@ -55,31 +62,18 @@ chain = (
 )
 
 
-# Add typing for input
-class Question(BaseModel):
-    __root__: str
+def ask_question(question_str: str):
+    # Assuming there's an `execute` method or similar
+    # Replace `run` with the correct method
+    result = chain.invoke(question_str)
+    print("Response:", result)
 
 
-chain = chain.with_types(input_type=Question)
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Ask a question and get a response with context search on MongoDB.")
+    parser.add_argument("question", type=str, help="The question to ask.")
 
+    args = parser.parse_args()
 
-def _ingest(url: str) -> dict:
-    loader = PyPDFLoader(url)
-    data = loader.load()
-
-    # Split docs
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=500, chunk_overlap=0)
-    docs = text_splitter.split_documents(data)
-
-    # Insert the documents in MongoDB Atlas Vector Search
-    _ = MongoDBAtlasVectorSearch.from_documents(
-        documents=docs,
-        embedding=OpenAIEmbeddings(disallowed_special=()),
-        collection=MONGODB_COLLECTION,
-        index_name=ATLAS_VECTOR_SEARCH_INDEX_NAME,
-    )
-    return {}
-
-
-ingest = RunnableLambda(_ingest)
+    ask_question(args.question)
